@@ -1,0 +1,146 @@
+
+** COMMENT Pop Action
+:PROPERTIES:
+:header-args: :tangle no
+:END:
+
+*** COMMENT Pop
++ From https://gist.github.com/rntz/e4be7a42287266f3a36bb8f50bc30ab6#file-noise-py
++ Controls what happens on =pop= (when Tobii not turned on?)
+
+#+BEGIN_SRC talon
+# talon pop <user.text>: user.pop_store(text or "")
+pop that: user.pop_phrase()
+#+END_SRC
+
+From @rntz
+
+This is cool and if it works for you you should keep it, but at first glance I don't think it would work for me. (1) iiuc, this captures entire phrases, not single commands. So if I chain commands together and end with one I want to repeat, it will repeat the whole phrase including the part I didn't want.  Eg. Your example "go down third" would make popping go down three times; with my version popping would only go down once. This is a matter of what you're used to, I think... Either behaviour is sensible.
+
+(2) what if the quick action isn't a repeat? Eg. "Go top search word hello" is three separate commands: go top, search, word hello. But after saying that, the action I actually want popping to do is none of those: it's edit.find_next. in some contexts that can be done by repeating the command "search" or "search word hello" but in other environments that will do something different... The edit.find_next action is the thing I really always want.
+
+The simplest thing that might be useful is to wire up popping to just repeat the last command or phrase.
+
+#+BEGIN_SRC python
+from talon import Module, Context, app, speech_system, actions, noise
+
+ctx = Context()
+mod = Module()
+
+last_phrase = ""
+pop_phrase = ""
+
+auto_pop_that_phrases = ["go", "scroll", "delete", "clear"]
+
+def on_phrase(j):
+    """Record the last phrase"""
+    phrase = getattr(j["parsed"], "_unmapped", j["phrase"])
+    phrase = " ".join(word.split("\\")[0] for word in phrase)
+    global last_phrase
+    last_phrase = phrase
+    print(f'*** Storing last phrase: {last_phrase} ***')
+    # auto-set pop_phrase if the last phrase is in the auto_pop_that_phrases list
+
+    global auto_pop_that_phrases
+    for p in auto_pop_that_phrases:
+        if phrase[0:len(p)] == p:
+            global pop_phrase
+            pop_phrase = phrase
+
+speech_system.register('post:phrase', on_phrase)
+
+@mod.action_class
+class Actions:
+    def pop_phrase():
+        """Set pop command to the last phrase"""
+        global last_phrase
+        global pop_phrase
+        pop_phrase = last_phrase
+        print(f'*** Setting pop phrase: {pop_phrase} ***')
+
+def on_pop(active):
+    global pop_phrase
+    actions.mimic(pop_phrase) 
+
+noise.register("pop", on_pop)
+                       
+#+END_SRC
+
+*** COMMENT Actions
+
++ https://gist.github.com/rntz/e4be7a42287266f3a36bb8f50bc30ab6#file-gistfile1-txt
+
+#+BEGIN_SRC python
+from talon import Context, Module, actions, noise, ui
+from typing import Callable, Union
+import logging
+
+mod = Module()
+ctx = Context()
+
+quick_action = None
+
+@mod.action_class
+class Actions:
+    def quick_action_clear():
+        """Clears the quick action"""
+        global quick_action
+        # logging.info("== Quick action cleared ==")
+        quick_action = None
+
+    def quick_action_set(action: str):
+        """Sets the quick action"""
+        global quick_action
+        logging.info(f"== Quick action set to {action!r} ==")
+        quick_action = action
+
+    def quick_action_run():
+        """Runs the quick action"""
+        logging.info("== Quick action invoked ==")
+        if not quick_action:
+            logging.info("== Quick action invoked, but no quick action assigned ==")
+            return
+
+        # I should find a better way to do this. Frequently I simply want to set
+        # the quick action to "repeat this command" (not "repeat last command",
+        # repeat _this_ command). There's probably a way to do this with
+        # actions.mimic() or similar.
+        action = quick_action
+        if action == "core.repeat_command":
+            actions.core.repeat_command(1)
+        elif action == "edit.find_next":
+            actions.edit.find_next()
+        elif action == "edit.find_previous":
+            actions.edit.find_previous()
+        # emacs.talon probably
+        elif action == "key(alt-y)":
+            actions.key("alt-y")
+        # emacs-slow.talon, `before/after next/previous <user.char>`
+        elif action == "key(ctrl-s ctrl-s enter)":
+            actions.key("ctrl-s ctrl-s enter")
+        elif action == "key(ctrl-r ctrl-r enter)":
+            actions.key("ctrl-r ctrl-r enter")
+        elif action == "key(right ctrl-s ctrl-s left)":
+            actions.key("right ctrl-s ctrl-s left")
+        elif action == "key(left ctrl-r ctrl-r right)":
+            actions.key("left ctrl-r ctrl-r right")
+        # TODO: where are these from?
+        elif action == "key(ctrl-u ctrl-space)":
+            actions.key("ctrl-u ctrl-space")
+        elif action == "key(ctrl-x ctrl-@)":
+            actions.key("ctrl-x ctrl-@")
+        elif action == "key(ctrl-x e)":
+            actions.key("ctrl-x e")
+        else:
+            logging.info(f"== Unknown quick action: {action!r} ==")
+
+ui.register("app_deactivate", lambda app: actions.user.quick_action_clear())
+ui.register("win_focus", lambda win: actions.user.quick_action_clear())
+
+@ctx.action_class("user")
+class NoiseActions:
+    def pop():
+        actions.user.quick_action_run()
+#+END_SRC
+
+

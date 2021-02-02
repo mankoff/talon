@@ -1,0 +1,934 @@
+#+TITLE: Talon config
+
+* Table of contents                               :toc_4:noexport:
+- [[#introduction][Introduction]]
+- [[#testing][Testing]]
+- [[#talon][Talon]]
+  - [[#notify][Notify]]
+  - [[#sleep][Sleep]]
+    - [[#inactivity][Inactivity]]
+    - [[#system-sleep][System sleep]]
+- [[#apps][Apps]]
+  - [[#kde-plasma][KDE Plasma]]
+  - [[#konsole][Konsole]]
+  - [[#slack-linux][Slack linux]]
+  - [[#emacs][Emacs]]
+    - [[#elisp][elisp]]
+    - [[#general][General]]
+    - [[#org][Org]]
+    - [[#bash][Bash]]
+    - [[#mu4e][mu4e]]
+    - [[#python][python]]
+- [[#pop-action][Pop Action]]
+  - [[#pop][Pop]]
+- [[#setup][Setup]]
+
+* Introduction
+
+This is Talon Voice configuration inside a literate Org Mode file.
+
+* Testing
+
+#+BEGIN_SRC talon
+# talon debug this: user.kdm_debug()
+#+END_SRC
+
+#+BEGIN_SRC python
+# from talon import Module, Context, app, speech_system
+# import os
+
+# ctx = Context()
+# mod = Module()
+
+# do_notify = True
+
+# @mod.action_class
+# class Actions:
+#     def kdm_debug():
+#         """Debug function"""
+#         global do_notify
+#         print(f"*** KDM DEBUG: {do_notify} ***")
+#         do_notify = not do_notify
+
+#         # app.notify("top")
+#         # global do_notify
+#         if do_notify:
+#             app.notify("here")
+#             speech_system.unregister('post:phrase', on_phrase)
+#         else:
+#             app.notify("there")
+#             speech_system.register('post:phrase', on_phrase)
+#         # do_notify = not do_notify
+        
+#+END_SRC
+
+* Talon
+** Notify
+
++ This file will add a system notification that shows you what Talon heard.
++ See also =command history=
+  + Length configured in [[../settings.talon]]
+  + Location configured in [[../code/help.py]]
+
+#+BEGIN_SRC talon
+talon notify: user.notify_toggle()
+#+END_SRC
+
+#+BEGIN_SRC python
+from talon import Module, Context, app, speech_system, actions
+
+ctx = Context()
+mod = Module()
+
+def on_phrase(j):
+    phrase = getattr(j["parsed"], "_unmapped", j["phrase"])
+    phrase = " ".join(word.split("\\")[0] for word in phrase)
+    app.notify(phrase)
+
+speech_system.register('post:phrase', on_phrase)
+
+# above enables notifications. Below supports toggling them.
+
+do_notify = True
+
+@mod.action_class
+class Actions:
+    def notify_toggle():
+        """Toggle OS notifications"""
+        global do_notify
+        if do_notify:
+            speech_system.unregister('post:phrase', on_phrase)
+        else:
+            speech_system.register('post:phrase', on_phrase)
+        do_notify = not do_notify
+#+END_SRC
+#+RESULTS:
+
+
+** COMMENT Microphone
+
+#+BEGIN_SRC python
+# https://github.com/nriley/knausj_talon/blob/nriley/misc/microphone.py
+from talon import actions, noise, registry
+from talon.microphone import manager
+
+PREFERRED_MICROPHONES = ('Jabra Link 370', 'Jabra Evolve 75', 'SpeechMike III')
+
+def device_name(device):
+    name = device.name
+    # Windows microphone device names are of the format "Microphone (...)"
+    if name.startswith('Microphone (') and name.endswith(')'):
+        name = name[12:-1]
+    return name
+
+def mic_changed_to(device):
+    if device and device_name(device) not in PREFERRED_MICROPHONES:
+        actions.speech.set_microphone('None')
+
+manager.register('mic_change', mic_changed_to)
+
+# note: cubeb API may not be stable; don't rely on this
+from talon.lib import cubeb
+
+ctx = cubeb.Context()
+def devices_changed(device_type):
+    if device_type is cubeb.DeviceType.INPUT:
+        for device in ctx.inputs():
+            if device.state is not cubeb.DeviceState.ENABLED:
+                continue
+            name = device_name(device)
+            if name in PREFERRED_MICROPHONES:
+                print(f'Setting microphone to {name}')
+                actions.speech.set_microphone(device.name)
+                actions.speech.enable()
+                return
+        print(f'Setting microphone to None')
+        actions.speech.set_microphone('None')
+
+ctx.register('devices_changed', devices_changed)
+
+# at startup, disable speech recognition if no preferred microphone connected
+from talon import app
+app.register('launch', lambda: devices_changed(cubeb.DeviceType.INPUT))
+#+END_SRC
+
+
+** Sleep
+:PROPERTIES:
+:header-args:python+: :tangle sleep.py
+:END:
+*** Inactivity
+
++ Execute =talon sleep= after some inactivity
+
+#+BEGIN_SRC python
+from talon import ui, actions, cron, speech_system, app
+
+job = None
+def on_phrase(j):
+    global job
+    if j.get('phrase'):
+        cron.cancel(job)
+        job = cron.after('15m', actions.speech.disable)
+
+speech_system.register('post:phrase', on_phrase)
+
+def on_ready():
+    global job
+    if actions.speech.enabled():
+       job = cron.after('15m', actions.speech.disable)
+       
+app.register("ready", on_ready)
+
+#+END_SRC
+
+*** System sleep
+
++ Also sleep when the screen sleeps.
+
+#+BEGIN_SRC python
+# https://github.com/nriley/knausj_talon/blob/nriley/misc/screen.py
+
+ui.register('screen_sleep', lambda e: actions.speech.disable())
+# ui.register('screen_wake')
+
+#+END_SRC
+
+    
+** COMMENT Mouse
+
+#+BEGIN_SRC talon
+mouse <number> east:
+  x = mouse_x()
+  y = mouse_y()
+  mouse_move(x+number,y)
+#+END_SRC
+
+* Apps
+** KDE Plasma
+
+#+BEGIN_SRC talon
+# krunner
+system search: key(alt-space)
+
+# desk one: key(alt-1)
+# desk two: key(alt-2)
+# desk <number>: user.switch_desk("{number}")
+
+desk <user.number_key>: key("alt-{number_key}")
+desk clear: key("f10")
+desk all: key("f11")
+desk window: key(f12)
+
+window tab: key(alt-tab)
+window bat: key("alt-shift-tab")
+window left: key("super-left")
+window right: key("super-right")
+#+END_SRC
+
+#+BEGIN_SRC python
+# from talon import ctrl, Module, Context
+# import os
+
+# ctx = Context()
+# mod = Module()
+
+# @mod.action_class
+# class Actions:
+#     def switch_desk(index: str):
+#         """Switch to a virtual desktop by index (starting at 1)"""
+#         os.system("wmctrl -s " + str(int(index) - 1))
+#         # OR: os.system("xdotool set_desktop " + str(int(index) - 1))
+#+END_SRC
+
+** Konsole
+
+#+BEGIN_SRC talon
+app: /konsole/
+-
+#+END_SRC
+
+#+name: konsole
+#+BEGIN_SRC talon
+list:
+	insert("nth")
+	key(enter)
+	
+list time:
+	insert("nth -tr")
+	key(enter)
+
+list size:
+	insert("dux")
+	key(enter)
+
+# find [<user.text>]: user.terminal_change_directory(text or "")
+find file [<user.text>]: 
+     insert("find ./ -name \"*")
+     insert(user.text)
+     insert("*\"")
+     key(enter)
+
+find inside [<user.text>]: 
+     insert("ag ")
+     insert(user.text)
+     key(enter)
+
+jump increase:
+     insert("j -i")
+     key(enter)
+     
+jump [<user.text>]:
+    insert("j ")
+    insert(user.text)
+    key(enter)
+    
+folder [<user.text>]:
+    insert("cd ")
+    key(tab)
+    insert(user.text)
+    key(enter)
+
+#     user.terminal_list_directories()
+# lisa all: 
+#     user.terminal_list_all_directories()
+katie [<user.text>]: user.terminal_change_directory(text or "")
+katie root: user.terminal_change_directory_root()
+clear screen: user.terminal_clear_screen()
+run last: user.terminal_run_last()
+kill all: user.terminal_kill_all()
+#+END_SRC
+
+    
+** Slack linux
+
+#+BEGIN_SRC talon
+os: linux
+app: slack
+-
+tag(): user.messaging
+
+# messages
+action(user.messaging_open_search): key(ctrl-g)
+
+toggle left sidebar: key(ctrl-shift-d)
+toggle right sidebar: key(ctrl-.)
+
+# Workspace
+# workspace <number>: key("cmd-{number}")
+# action(user.messaging_workspace_previous): key(cmd-shift-[)
+# action(user.messaging_workspace_next): key(cmd-shift-])
+# # Channel
+# (slack | lack) [channel] info: key(cmd-shift-i)
+# action(user.messaging_open_channel_picker): key(cmd-k)
+action(user.messaging_channel_previous): key(alt-up)
+action(user.messaging_channel_next): key(alt-down)
+action(user.messaging_unread_previous): key(alt-shift-up)
+action(user.messaging_unread_next): key(alt-shift-down)
+# # Navigation
+# (move | next) focus: key(ctrl-`)
+# [next] (section | zone): key(f6)
+# (previous | last) (section | zone): key(shift-f6)
+# (slack | lack) [direct] messages: key(cmd-shift-k)
+# (slack | lack) threads: key(cmd-shift-t)
+# (slack | lack) (history [next] | back | backward): key(cmd-[)
+# (slack | lack) forward: key(cmd-])
+# [next] (element | bit): key(tab)
+# (previous | last) (element | bit): key(shift-tab)
+# (slack | lack) (my stuff | activity): key(cmd-shift-m)
+# (slack | lack) directory: key(cmd-shift-e)
+# (slack | lack) (starred [items] | stars): key(cmd-shift-s)
+# (slack | lack) unread [messages]: key(cmd-j)
+# (go | undo | toggle) full: key(ctrl-cmd-f)
+
+#     # Messaging
+# grab left: key(shift-up)
+# grab right: key(shift-down)
+# add line: key(shift-enter)
+# (slack | lack) (slap | slaw | slapper): key(cmd-right shift-enter)
+# (slack | lack) (react | reaction): key(cmd-shift-\\)
+# (insert command | commandify): key(cmd-shift-c)
+# insert code:
+#     insert("``````")
+#     key(left left left)
+#     key(shift-enter)
+#     key(shift-enter)
+#     key(up)
+# (slack | lack) (bull | bullet | bulleted) [list]: key(cmd-shift-8)
+# (slack | lack) (number | numbered) [list]: key(cmd-shift-7)
+# (slack | lack) (quotes | quotation): key(cmd-shift->)
+# bold: key(cmd-b)
+# (italic | italicize): key(cmd-i)
+# (strike | strikethrough): key(cmd-shift-x)
+# action(user.messaging_mark_workspace_read): key(shift-esc)
+# action(user.messaging_mark_channel_read): key(esc)
+# (clear | scrap | scratch): key(cmd-a backspace)
+#     # Files and Snippets
+# action(user.messaging_upload_file): key(cmd-u)
+# (slack | lack) snippet: key(cmd-shift-enter)
+#     # Calls
+# ([toggle] mute | unmute): key(m)
+# (slack | lack) ([toggle] video): key(v)
+# (slack | lack) invite: key(a)
+#     # Miscellaneous
+# (slack | lack) shortcuts: key(cmd-/)
+# emote <user.text>: "{text}"
+
+#+END_SRC
+
+** Emacs
+
++ Note: See [[file:~/.emacs.d/emacs.org::* Talon]] for Emacs Talon setup.
+
+*** elisp
+:PROPERTIES:
+:header-args: :tangle no
+:END:
+
+#+BEGIN_SRC emacs-lisp :results none
+(defun my/search-forward-point-to-word-start ()
+  (interactive)
+  (isearch-forward)
+  (backward-word))
+
+(defun my/search-backward-point-to-word-start ()
+  (interactive)
+  (isearch-backward))
+
+(global-set-key (kbd "s-t s") 'my/search-forward-point-to-word-start)
+(global-set-key (kbd "s-t r") 'my/search-backward-point-to-word-start)
+#+END_SRC
+
+
+*** General  
+#+BEGIN_SRC talon
+app: /emacs/
+-
+# key_wait increases the delay when pressing keys (milliseconds)
+# this is useful if an app seems to jumble or drop keys
+settings():
+    key_wait = 2.0
+
+#tag(): user.line_commands
+
+check mail: key(shift-alt-r)
+inbox: key(shift-alt-M)
+agenda: key(shift-alt-A)
+junk: key(ctrl-d)
+open shell: key(alt-shift-s)
+(nick|nickle): key(ctrl-n)
+(pick|pickle): key(ctrl-p)
+(jump|find|search) next [<user.text>]:
+    key("super-t s")
+    insert(user.text)
+    key(enter)
+
+(jump|find|search) (last|back) [<user.text>]:
+    key("super-t r")
+    insert(user.text)
+    key(enter)
+
+#(jump back|search back):
+#    key(escape ctrl-r)
+
+# Edit action class
+action(edit.copy):
+        key(alt-w)
+
+action(edit.cut):
+        key(ctrl-w)
+
+action(edit.paste):
+        key(ctrl-y)
+
+action(edit.delete_line):
+        key(ctrl-shift-backspace)
+
+action(edit.delete_word):
+        key(alt-delete)
+
+action(edit.line_end):
+        key(ctrl-e)
+
+action(edit.select_all):
+        key(ctrl-x h)
+
+action(edit.undo):
+        key(ctrl-/)
+
+action(edit.line_start):
+        key(ctrl-a)
+
+action(edit.file_start):
+        key(alt-shift-<)
+
+action(edit.file_end):
+        key(alt-shift->)
+
+action(app.window_open):
+        key(ctrl-x 5 2)
+
+action(app.window_close):
+        key(ctrl-x 5 0)
+
+action(app.window_hide):
+        key(ctrl-z)
+
+# Emacs-specific
+
+# counterpart slap is defined in standard.talon
+slurp: key(ctrl-a ctrl-o)
+kill [line]: key(ctrl-k)
+kill whole [line]: key(ctrl-shift-backspace)
+line indentation end: key(alt-m)
+go [line] <number>$:
+    key(alt-g g)
+    insert(number)
+    key(enter)
+recenter: key(ctrl-l)
+
+paste (pop | ring): key(alt-y)
+mark that: key(ctrl-space)
+mark word: key(alt-@)
+mark pop: key(ctrl-u ctrl-space)
+mark (def | deaf | definition): key(ctrl-alt-h)
+mark (sexp | sex): key(ctrl-alt-space)
+
+help apropos: key(ctrl-h a)
+help bindings: key(ctrl-h b)
+help function: key(ctrl-h f)
+help key: key(ctrl-h k)
+help mode: key(ctrl-h m)
+
+file save: key(ctrl-x ctrl-s)
+file (find | open) : key(ctrl-x ctrl-f)
+
+# tree:
+#     key(alt-x)
+#     insert("treemacs")
+#     key(enter)
+
+# ideas from: https://github.com/jcaw/talon_config/blob/master/talon_files/emacs/basic.talon
+(quit | cancel | can): key(ctrl-g)
+(reset | rescue): key(esc esc esc)
+meta: key(alt-x)
+meta <user.text>:
+     key(alt-x)
+     insert(text)
+     key(enter)
+
+# Double `ctrl-c` means "submit", but the specific command varies based on
+# context. Easier to just bind the keypress than try and bind each
+# implementation.
+
+submit:  key(ctrl-c ctrl-c)
+discard: key(ctrl-c ctrl-k)
+
+(buffer | buff) switch: key(ctrl-x b)
+(buffer | buff) kill: key(ctrl-x k enter)
+(buffer | buff) next: key(ctrl-x right)
+(buffer | buff) (previous | pre | last): key(ctrl-x left)
+(buffer | buff) list: key(ctrl-x ctrl-b)
+
+search [forward] [<user.text>]:
+    key(ctrl-s)
+    insert(text or '')
+
+search (rev | reverse) [<user.text>]:
+    key(ctrl-r)
+    insert(text or '')
+
+search again: key(ctrl-s ctrl-s)
+
+search symbol at point: key(alt-s .)
+
+search and replace: key(ctrl-alt-%)
+
+occur [<user.text>]:
+    key(alt-s o)
+    insert(text or '')
+
+complete: key(alt-/)
+
+(his | history) (pre | previous | last): key(alt-p)
+(his | history) next: key(alt-n)
+
+match next: key(alt-g n)
+match (pre | previous | last): key(alt-g p)
+
+other [(window | win)]: key(alt-o)
+(close | kill) (window | win): key(ctrl-x 0)
+(close | kill) other (windows | wins): key(ctrl-x 1)
+balance [(windows | wins)]: key(ctrl-x +)
+# split [horizontal | horizontally]: key(ctrl-x 2)
+# split [vertical | vertically]: key(ctrl-x 3)
+[window | win | frame] new: key(ctrl-x 5 2)
+
+# projectile
+# https://docs.projectile.mx/projectile/usage.html
+project (file | files | find file): key(cmd-p f)
+project (directory | directories): key(cmd-p d)
+project (search | find | grep): key(cmd-p s g)
+project (buffers | buff): key(cmd-p b)
+project relative: key(cmd-p a)
+project (kill | close): key(cmd-p k)
+project (recent | recents | recent files): key(cmd-p e)
+
+projects list [(all | known)]: key(cmd-p p)
+projects list open: key(cmd-p q)
+
+# magit
+git status: key(ctrl-x g)
+
+# commenting
+comment: key(alt-;)
+comment continue: key(alt-j)
+comment line: key(ctrl-x ctrl-;)
+
+# transposition
+transpose lines: key(ctrl-x ctrl-t)
+
+#+END_SRC
+
+#+BEGIN_SRC python
+from talon import Context, Module, actions
+
+ctx = Context()
+mod = Module()
+
+mod.tag("emacs", desc="Active when Emacs is focused.")
+
+ctx.matches = """
+app: /emacs/
+"""
+
+@ctx.action_class('win')
+class win_actions:
+    def filename():
+        title = actions.win.title()
+        # currently in emacs the window title includes the file name
+        return title
+
+    def file_ext():
+        return actions.win.filename().split(".")[-1]
+
+#+END_SRC
+
+*** Org
+
+#+BEGIN_SRC talon
+app: /emacs/
+title: /.org/
+-
+
+(level|heading) one: insert("* ")
+(level|heading) two: insert("** ")
+(level|heading) three: insert("*** ")
+(level|heading) four: insert("**** ")
+(level|heading) cycle: key(tab)
+
+go up level: key(ctrl-c ctrl-u)
+go up section: key(ctrl-c ctrl-p)
+go down section: key(ctrl-c ctrl-n)
+go up (babel|code): key(ctrl-c ctrl-v ctrl-p)
+go down (babel|code): key(ctrl-c ctrl-v ctrl-n)
+
+### Babel
+
+# yasnippets. Make "name: user.text" pronouncable words
+(code | babel | template) <user.text>:
+     key(ctrl-c & ctrl-s)
+     insert(text)
+     key(enter)
+     sleep(50ms)
+     key(" ")
+     sleep(50ms)
+     key(backspace)
+     # key(alt-x)
+     # insert("set-frame-title")
+     # key(enter)
+
+(code | babel) tangle this: key(ctrl-u ctrl-c ctrl-v ctrl-t)
+(code | babel) tangle: key(ctrl-c ctrl-v ctrl-t)
+(code | babel) (up|last): key(ctrl-c ctrl-v ctrl-p)
+(code | babel) (down|next): key(ctrl-c ctrl-v ctrl-n)
+
+### Export
+
+export (tech | latex): key(ctrl-c ctrl-e l l)
+export web: key(ctrl-c ctrl-e h h)
+export dock: key(ctrl-c ctrl-e o o)
+
+
+# # yasnippets. Make "name: user.text" pronouncable words
+# (babel | template) <user.text>:
+#      key(ctrl-c & ctrl-s)
+#      insert(text)
+#      key(enter)
+
+# buffer [<phrase>]: 
+#    user.emacs_buffer_prompt()
+#    user.insert_lowercase(phrase or "")
+
+
+#+END_SRC
+    
+*** Bash
+
+#+BEGIN_SRC talon
+app: /emacs/
+title: /shell/
+-
+
+debug: insert("debug emacs bash")
+send (line|it): key(alt-s)
+submit: key(alt-s down)
+
+<<konsole>>
+
+#+END_SRC
+
+    
+*** mu4e
+
+#+BEGIN_SRC talon
+app: /emacs/
+title: /mu4e/
+-
+
+delete: key(d)
+(undelete|keep): key(=)
+unmark: key(u)
+mark: key("*")
+archive: key(r)
+send this email: key(ctrl-c ctrl-c)
+confirm: key(y)
+apply: key(x)
+compose: key(C)
+#+END_SRC
+
+    
+*** python
+
+#+BEGIN_SRC talon
+app: /emacs/
+win.title: /org.*python/
+-
+
+debug: insert("debug emacs python")
+# action("code.language"): "python"
+#+END_SRC
+
++ If =org= and =python= are in the Emacs frame title, assume we're in a Babel Python block and enable *both* languages.
++ See: https://github.com/talonvoice/talon/issues/215
++ See: https://emacs.stackexchange.com/questions/
+
+I adjust the Emacs frame title when I enter an Org Babel block with:
+
+#+BEGIN_SRC emacs-lisp :tangle no
+(defun my/set-frame-title ()
+  (interactive)
+  (setq frame-title-format 
+	(if (org-in-src-block-p)
+	    (format "%s - %s"
+		    (buffer-file-name)
+		    (org-element-property :language (org-element-context)))
+
+	  (if (buffer-file-name)
+	      '(buffer-file-name "%f" ("%b"))
+	      (buffer-name)))))
+
+(add-hook 'post-command-hook 'my/set-frame-title)
+#+END_SRC
+
+#+BEGIN_SRC python
+from talon import Context, Module
+
+ctx = Context()
+
+ctx.matches = """
+app: /emacs/
+win.title: /org.*python/
+"""
+
+@ctx.action_class("code")
+class org_python_actions:
+    def language():
+        return set(["python", "org"])
+#+END_SRC
+
+* Pop Action
+:PROPERTIES:
+:header-args: :tangle no
+:END:
+
+** Pop
++ From https://gist.github.com/rntz/e4be7a42287266f3a36bb8f50bc30ab6#file-noise-py
++ Controls what happens on =pop= (when Tobii not turned on?)
+
+#+BEGIN_SRC talon
+# talon pop <user.text>: user.pop_store(text or "")
+pop that: user.pop_phrase()
+#+END_SRC
+
+From @rntz
+
+This is cool and if it works for you you should keep it, but at first glance I don't think it would work for me. (1) iiuc, this captures entire phrases, not single commands. So if I chain commands together and end with one I want to repeat, it will repeat the whole phrase including the part I didn't want.  Eg. Your example "go down third" would make popping go down three times; with my version popping would only go down once. This is a matter of what you're used to, I think... Either behaviour is sensible.
+
+(2) what if the quick action isn't a repeat? Eg. "Go top search word hello" is three separate commands: go top, search, word hello. But after saying that, the action I actually want popping to do is none of those: it's edit.find_next. in some contexts that can be done by repeating the command "search" or "search word hello" but in other environments that will do something different... The edit.find_next action is the thing I really always want.
+
+The simplest thing that might be useful is to wire up popping to just repeat the last command or phrase.
+
+#+BEGIN_SRC python
+from talon import Module, Context, app, speech_system, actions, noise
+
+ctx = Context()
+mod = Module()
+
+last_phrase = ""
+pop_phrase = ""
+
+auto_pop_that_phrases = ["go", "scroll", "delete", "clear"]
+
+def on_phrase(j):
+    """Record the last phrase"""
+    phrase = getattr(j["parsed"], "_unmapped", j["phrase"])
+    phrase = " ".join(word.split("\\")[0] for word in phrase)
+    global last_phrase
+    last_phrase = phrase
+    print(f'*** Storing last phrase: {last_phrase} ***')
+    # auto-set pop_phrase if the last phrase is in the auto_pop_that_phrases list
+
+    global auto_pop_that_phrases
+    for p in auto_pop_that_phrases:
+        if phrase[0:len(p)] == p:
+            global pop_phrase
+            pop_phrase = phrase
+
+speech_system.register('post:phrase', on_phrase)
+
+@mod.action_class
+class Actions:
+    def pop_phrase():
+        """Set pop command to the last phrase"""
+        global last_phrase
+        global pop_phrase
+        pop_phrase = last_phrase
+        print(f'*** Setting pop phrase: {pop_phrase} ***')
+
+def on_pop(active):
+    global pop_phrase
+    actions.mimic(pop_phrase) 
+
+noise.register("pop", on_pop)
+                       
+#+END_SRC
+
+* COMMENT Quick Macro
+** Setup
+#+BEGIN_SRC python
+from talon import Context, Module, actions, noise, ui
+from typing import Callable, Union, Any
+import logging
+
+mod = Module()
+ctx = Context()
+
+# This could be None or a tuple.
+# None: unassigned.
+# tuple: (actions, *args). Action is the path to an action.
+quick_macro = None
+
+@mod.action_class
+class Actions:
+    def quick_macro_clear():
+        """Clears the quick macro"""
+        global quick_macro
+        # logging.info("== Quick macro cleared ==")
+        quick_macro = None
+
+    def quick_macro_set(action: str, arg: Any = None):
+        """Sets the quick macro"""
+        global quick_macro
+        quick_macro = (action, arg) if arg is not None else (action,)
+        logging.info(f"== quick macro set to {quick_macro!r} ==")
+
+    def quick_macro_run():
+        """Runs the quick macro"""
+        if quick_macro is None:
+            logging.info("== quick macro invoked, but no quick macro assigned ==")
+            return
+        logging.info("== quick macro invoked ==")
+        if isinstance(quick_macro, tuple):
+            action, *args = quick_macro
+            func = actions
+            for pathelt in action.split('.'):
+                func = getattr(func, pathelt)
+            func(*args)
+        else:
+            logging.info(f"== Unknown quick macro: {action!r} ==")
+
+ui.register("app_deactivate", lambda app: actions.user.quick_macro_clear())
+ui.register("win_focus", lambda win: actions.user.quick_macro_clear())
+
+@ctx.action_class("user")
+class NoiseActions:
+    def pop():
+        actions.user.quick_macro_run()
+
+# noise.register('pop', pop)
+
+# def on_pop(noise):
+#     actions.user.quick_macro_run()
+    
+# noise.register('pop', on_pop)
+#+END_SRC
+
+
+** Commands
+
+#+BEGIN_SRC talon
+search:
+    edit.find()
+    user.quick_macro_set("edit.find_next")
+
+go next | later:
+    edit.find_next()
+    user.quick_macro_set("edit.find_next")
+
+go last | prior:
+    edit.find_previous()
+    user.quick_macro_set("edit.find_previous")
+
+don't | undo [that]:
+  edit.undo()
+  user.quick_macro_set("edit.undo")
+
+# Emacs keyboard macro commands
+emacs record: key("ctrl-x (")
+emacs stop: key("ctrl-x )")
+emacs play:
+  key(ctrl-x e)
+  user.quick_macro_set("key", "ctrl-x e")
+#+END_SRC
+
+* COMMENT Template
+
+#+BEGIN_SRC talon
+
+#+END_SRC
+
+#+BEGIN_SRC python
+
+#+END_SRC
+
+* Setup
+
+To make tangling easy, each section below will tangle to a file based on the nested section name. For example, a =#+BEGIN_SRC talon= block under section =Foo= and subsection =Bar= will tangle to =Foo_Bar.talon=. This behavior is not built into Org but we define a small function to get the nested section name, and then use that function as the =:tangle= argument. This function is defined at the bottom of the file using Emacs syntax so it evaluates every time this file is opened.
+
+#+PROPERTY: header-args:talon :comments no :tangle-mode (identity #o444) :tangle (concat (nested_section) ".talon")
+#+PROPERTY: header-args:python :comments no :tangle-mode (identity #o444) :tangle (concat (nested_section) ".py")
+
+# Local Variables:
+# eval: (defun nested_section () (require 's) (s-replace " " "_" (org-display-outline-path nil t "_" t)))
+# End:
