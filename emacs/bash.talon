@@ -6,6 +6,11 @@ debug: insert("debug emacs bash")
 send (line|it): key(alt-s)
 submit: key(alt-s down)
 
+cat: insert("cat ")
+less: insert("less ")
+open: insert("o ")
+change mode: insert("chmod ")
+
 list:
 	insert("nth")
 	key(enter)

@@ -12,6 +12,7 @@ inbox: key(shift-alt-M)
 agenda: key(shift-alt-A)
 junk: key(ctrl-d)
 open shell: key(alt-shift-s)
+(deed|deer|dear|dired): key(ctrl-x D)
 (nick|nickle): key(ctrl-n)
 (pick|pickle): key(ctrl-p)
 (jump|find|search) next [<user.text>]:
