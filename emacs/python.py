@@ -4,7 +4,7 @@ ctx = Context()
 
 ctx.matches = """
 app: /emacs/
-win.title: /org.*python/
+win.title: /org.*python|jupyter-repl/
 """
 
 @ctx.action_class("code")

@@ -1,17 +1,13 @@
-app: /konsole/
+app: /emacs/
+title: /shell/
 -
 
-paste that: key(ctrl-shift-v)
+debug: insert("debug emacs bash")
+
 cat: insert("cat ")
 cat less: insert("less ")
 open: insert("o ")
 change mode: insert("chmod ")
-pickle: key(ctrl-p)
-nickle: key(ctrl-n)
-scroll up: key(shift-page-up)
-scroll down: key(shift-page-down)
-go up: key(shift-up)
-go down: key(shift-down)
 
 list: insert("nth ")
 

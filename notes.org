@@ -144,3 +144,49 @@ class NoiseActions:
 #+END_SRC
 
 
+
+
+* Overriding Knausj
+
+
+syno instead of using mimic you can use an artificial tag that you require in all your own files. because most specific command definitions get used, your stuff will be prefered to knausj wherever you defined it. So just define the tag privateStuff or something, that is always on. then add it to the top of your own files. (edited) 
+white_check_mark
+heart
+thumbsup::skin-tone-5
+
+
+
+
+
+15:46
+Gorthaur yeah technical debt until a model can be trained to my way of speaking. I will have a look at the tag thank you
+17:21
+mankoff @syno can you clarify how to force/know that my vocab gets precedence over knausj?
+New
+23:57
+syno yes. outside of knausj, create a new file and add:
+-
+tag(): user.private
+this means this tag is always on.
+now in all of your own files (the ones you want to override knausj), add
+tag: user.private
+to the list of requirements on top of the file (above the dash).
+23:59
+because they require an additional tag in comparison to their knausj counterparts, they will overwrite them, if settings, rules etc occur in both.
+This is because the most specific ruleset always gets selected, even though the tag that causes this is always active. (edited) 
+:+1::skin-tone-5:
+1
+
+00:00
+syno oh and I think you need to have python file containing the following
+mod = Module()
+tagList = [
+    "private",
+]
+for entry in tagList:
+    mod.tag(entry, f"tag to load {entry} and/or related plugins ")
+because tags need to be specified before they can be set.
+00:00
+if you want to have the same behaviour in python instead of talon files, you can also set the tag through code:
+ctx = Context()
+ctx.matches = 'tag: user.private'

@@ -7,6 +7,14 @@ settings():
 
 #tag(): user.line_commands
 
+guess log: key(ctrl-c k G l)
+
+head: key(ctrl-a)
+tail: key(ctrl-e)
+
+other (buf|buffer): key(ctrl-o)
+close this (buf|buffer): key(ctrl-x 0)
+close other (buf|buffer): key(ctrl-x 1)
 check mail: key(shift-alt-r)
 inbox: key(shift-alt-M)
 agenda: key(shift-alt-A)
@@ -24,6 +32,13 @@ open shell: key(alt-shift-s)
     key("super-t r")
     insert(user.text)
     key(enter)
+
+# Emacs keyboard macro commands
+emacs record: key(f3)
+emacs stop: key(f3)
+emacs play:
+  key(f4)
+# user.quick_macro_set("key", "f4")
 
 #(jump back|search back):
 #    key(escape ctrl-r)
@@ -87,9 +102,11 @@ recenter: key(ctrl-l)
 paste (pop | ring): key(alt-y)
 mark that: key(ctrl-space)
 mark word: key(alt-@)
+mark region: key(ctrl-=)
 mark pop: key(ctrl-u ctrl-space)
 mark (def | deaf | definition): key(ctrl-alt-h)
 mark (sexp | sex): key(ctrl-alt-space)
+mark (clear|unset): key(ctrl-g)
 
 help apropos: key(ctrl-h a)
 help bindings: key(ctrl-h b)

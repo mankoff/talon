@@ -14,6 +14,12 @@ go down section: key(ctrl-c ctrl-n)
 go up (babel|code): key(ctrl-c ctrl-v ctrl-p)
 go down (babel|code): key(ctrl-c ctrl-v ctrl-n)
 
+reference: key(ctrl-c r)
+follow link: key(ctrl-c ctrl-o)
+
+insert date: key(ctrl-c !)
+insert inactive date: key(ctrl-c <)
+
 ### Babel
 
 # yasnippets. Make "name: user.text" pronouncable words
@@ -33,13 +39,14 @@ go down (babel|code): key(ctrl-c ctrl-v ctrl-n)
 (code | babel) tangle: key(ctrl-c ctrl-v ctrl-t)
 (code | babel) (up|last): key(ctrl-c ctrl-v ctrl-p)
 (code | babel) (down|next): key(ctrl-c ctrl-v ctrl-n)
+(code | babel) (top|header): key(ctrl-c ctrl-v ctrl-u)
+(code | babel) show header: key(ctrl-c ctrl-v tab)
 
 ### Export
 
 export (tech | latex): key(ctrl-c ctrl-e l l)
 export web: key(ctrl-c ctrl-e h h)
 export dock: key(ctrl-c ctrl-e o o)
-
 
 # # yasnippets. Make "name: user.text" pronouncable words
 # (babel | template) <user.text>:

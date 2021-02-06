@@ -10,7 +10,7 @@ desk clear: key("f10")
 desk all: key("f11")
 desk window: key(f12)
 
-window tab: key(alt-tab)
+(win|window) tab: key(alt-tab)
 window bat: key("alt-shift-tab")
 window left: key("super-left")
 window right: key("super-right")
