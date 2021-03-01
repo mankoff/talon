@@ -19,7 +19,11 @@ toggle right sidebar: key(ctrl-.)
 action(user.messaging_channel_previous): key(alt-up)
 action(user.messaging_channel_next): key(alt-down)
 action(user.messaging_unread_previous): key(alt-shift-up)
-action(user.messaging_unread_next): key(alt-shift-down)
+action(user.messaging_unread_next):
+	key(alt-shift-down)
+	user.quick_macro_set("user.messaging_unread_next")
+
+
 # # Navigation
 # (move | next) focus: key(ctrl-`)
 # [next] (section | zone): key(f6)

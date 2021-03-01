@@ -1,6 +1,5 @@
 app: /emacs/
-win.title: /org.*python/
-win.title: /jupyter-rep/
+win.title: /jupyter/
 -
 
 debug: insert("debug emacs python")

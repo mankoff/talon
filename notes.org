@@ -1,10 +1,25 @@
 
-** COMMENT Pop Action
+* Talon Script
+
+#+BEGIN_QUOTE
+#everything above the dash (-) is a very basic markup language
+- 
+The right side of the colon is a markup language : "the left side of the colon and everything indented is TalonScript"
+voice command defined in talonscript only <some_capture_defined_in_python> {some_list_defined_in_python}:
+    call_action() # call an action that was built-in or defined by a user
+    print(some_caputure_defined_in_python) # use the captured <some_capture_defined_in_python> as a variable
+    print(some_capture_defined_in_python or '') # do null coalescing if phrase is optional and was not provided
+    user.long_action_defined_in_python(1, 2, 3, 4) # call a longer action with parameters
+    a = anything # assign a variable
+    b = 1 + 2 # do math (limited to a single operator per expression)
+    print("{b} do some string interpolation")
+#+END_QUOTE
+* COMMENT Pop Action
 :PROPERTIES:
 :header-args: :tangle no
 :END:
 
-*** COMMENT Pop
+** COMMENT Pop
 + From https://gist.github.com/rntz/e4be7a42287266f3a36bb8f50bc30ab6#file-noise-py
 + Controls what happens on =pop= (when Tobii not turned on?)
 
@@ -66,7 +81,7 @@ noise.register("pop", on_pop)
                        
 #+END_SRC
 
-*** COMMENT Actions
+** COMMENT Actions
 
 + https://gist.github.com/rntz/e4be7a42287266f3a36bb8f50bc30ab6#file-gistfile1-txt
 
@@ -190,3 +205,300 @@ because tags need to be specified before they can be set.
 if you want to have the same behaviour in python instead of talon files, you can also set the tag through code:
 ctx = Context()
 ctx.matches = 'tag: user.private'
+
+* Hold modifiers
+
+Kim Taylor Today at 07:21
+|Quick question, is there a way I can hold down modifier keys while I perform a click and drag? For example option clicking and dragging file to duplicate, or or proportionally scaling an image by holding on shift
+
+
+
+
+2 replies
+knausj  37 minutes ago
+shift hold: key(shift:down)
+shift release: key(shift:up)
+there's nothing built-in to my repository the moment, but you could do something like the above
+knausj  33 minutes ago
+you could also extend to all modifiers if you wish
+<user.modifiers> hold: key("{modifiers}:down")
+<user.modifiers> release: key("{modifiers}:up")
+
+* Select text
+
+sunnylan Hi, new to Talon. If I'm in Chrome for example and I want to select part of a page, is there any way to go about this?
+10:33
+tararoys 
+Position the mouse with Whatever you were using for a mouse.  Eye tracker, voice commands which ever.  (Mouse grid is the built-in one, although you have to turn it on)
+Click by using the voice command touch
+Reposition the mouse
+Say the voice command “shift touch”
+
+
+* Talon sentence babble
+
+#+BEGIN_SRC python :results output :python ${HOME}/.talon/bin/repl
+from talon import registry
+from user.knausj_talon.code import help
+
+import re
+
+active_contexts = registry.active_contexts()
+help.update_active_contexts_cache(active_contexts)
+
+for context_name, context in registry.contexts.items():
+    if context_name != 'user.talon.emacs.mu4e.talon': continue
+    for command_alias, val in context.commands.items():
+        if val.rule.rule != 'reply': continue
+        #print(command_alias, val)
+        #     print(str(val))
+        #     print(str(val.rule))
+        print(str(val.rule.rule) + ": " + val.target.code)
+        x = val.rule.parse
+        dir(x)
+        print(x.__str__())
+
+
+    # if command_alias in registry.commands:
+        #     print(str(val.rule.rule) + ": " + val.target.code)
+            # context_command_map[context_name][
+            #     str(val.rule.rule)
+            # ] = val.target.code
+
+    # print("DIR", dir(c))
+    # print(c.items)
+    # # c()
+
+print("")
+#+END_SRC
+
+#+RESULTS:
+: Talon REPL | Python 3.9.2 (default, Feb 20 2021, 08:57:16) [GCC 7.5.0] on linux)
+: reply: key(R)
+: ['__call__', '__class__', '__delattr__', '__dir__', '__doc__', '__eq__', '__format__', '__func__', '__ge__', '__get__', '__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__le__', '__lt__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__self__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__']
+: <method-wrapper '__str__' of method object at 0x7f8e67585b00>
+: 
+
+#+BEGIN_SRC python :results output :python ${HOME}/.talon/bin/repl
+from talon import Module, Context, actions, imgui, Module, registry, ui, app
+
+from user.knausj_talon.code.help import *
+
+from collections import defaultdict
+import itertools
+import math
+from typing import Dict, List, Iterable, Set, Tuple, Union
+
+from talon import Module, Context, actions, imgui, Module, registry, ui, app
+from talon.grammar import Phrase
+
+mod = Module()
+mod.list("help_contexts", desc="list of available contexts")
+mod.mode("help", "mode for commands that are available only when help is visible")
+setting_help_max_contexts_per_page = mod.setting(
+    "help_max_contexts_per_page",
+    type=int,
+    default=20,
+    desc="Max contexts to display per page in help",
+)
+setting_help_max_command_lines_per_page = mod.setting(
+    "help_max_command_lines_per_page",
+    type=int,
+    default=50,
+    desc="Max lines of command to display per page in help",
+)
+
+ctx = Context()
+# context name -> commands
+context_command_map = {}
+
+# rule word -> Set[(context name, rule)]
+rule_word_map: Dict[str, Set[Tuple[str, str]]] = defaultdict(set)
+search_phrase = None
+
+# context name -> actual context
+context_map = {}
+
+current_context_page = 1
+sorted_context_map_keys = []
+
+selected_context = None
+selected_context_page = 1
+
+total_page_count = 1
+
+cached_active_contexts_list = []
+
+live_update = True
+cached_window_title = None
+show_enabled_contexts_only = False
+
+enabled_only = True
+
+reset()
+search_phrase = "browser"
+# refresh_context_command_map()
+gui_alphabet.hide()
+# # gui_context_help.show()
+register_events(True)
+actions.mode.enable("user.help")
+
+
+global rule_word_map
+global context_command_map
+global context_map
+global sorted_context_map_keys
+global show_enabled_contexts_only
+global cached_window_title
+global context_map
+
+context_map = {}
+cached_short_context_names = {}
+show_enabled_contexts_only = enabled_only
+cached_window_title = ui.active_window().title
+active_contexts = registry.active_contexts()
+# print(str(active_contexts))
+update_active_contexts_cache(active_contexts)
+
+context_command_map = {}
+for context_name, context in registry.contexts.items():
+    splits = context_name.split(".")
+    index = -1
+    if "talon" in splits[index]:
+        index = -2
+        short_name = splits[index].replace("_", " ")
+    else:
+        short_name = splits[index].replace("_", " ")
+    if "mac" == short_name or "win" == short_name or "linux" == short_name:
+        index = index - 1
+        short_name = splits[index].replace("_", " ")
+    # print("short name: " + short_name)
+    if short_name in overrides:
+        short_name = overrides[short_name]
+    if enabled_only and context in active_contexts or not enabled_only:
+        print(short_name)
+        context_command_map[context_name] = {}
+        for command_alias, val in context.commands.items():
+            # print(str(val))
+            if command_alias in registry.commands:
+                # print(str(val.rule.rule) + ": " + val.target.code)
+                context_command_map[context_name][
+                    str(val.rule.rule)
+                ] = val.target.code
+        # print(short_name)
+        # print("length: " + str(len(context_command_map[context_name])))
+        if len(context_command_map[context_name]) == 0:
+            context_command_map.pop(context_name)
+        else:
+            cached_short_context_names[short_name] = context_name
+            context_map[context_name] = context
+
+refresh_rule_word_map(context_command_map)
+
+ctx.lists["self.help_contexts"] = cached_short_context_names
+# print(str(ctx.lists["self.help_contexts"]))
+sorted_context_map_keys = sorted(cached_short_context_names)
+
+
+#+END_SRC
+#+RESULTS:
+#+begin_example
+Talon REPL | Python 3.9.2 (default, Feb 20 2021, 08:57:16) [GCC 7.5.0] on linux)
+NameDecl("repl.help_contexts", "list of available contexts")
+NameDecl("repl.help", "mode for commands that are available only when help is visible")
+main
+{}
+record
+{}
+speech
+{}
+engines
+{}
+1password global
+dunst
+app
+{}
+edit
+{}
+abbreviate
+{}
+code
+{}
+edit
+{}
+file manager
+{}
+formatters
+{}
+homophones
+{}
+keys
+{}
+numbers
+{}
+ordinals
+{}
+switcher
+{}
+user settings
+{}
+vocabulary
+{}
+window snap
+{}
+comment
+operators
+programming
+python
+{}
+python
+vimscript
+{}
+abbreviate
+extensions
+formatters
+help
+help open
+history
+keys
+macro
+media
+microphone selection
+mouse
+repeater
+screenshot
+standard
+talon helpers
+toggles
+{}
+window management
+word selection
+language modes
+modes
+mouse grid
+{}
+settings
+{}
+generic editor
+homophones
+numbers
+symbols
+general
+{}
+general
+python
+{}
+python
+global
+momentary command
+plasma kde
+talon commands
+quick macro
+{}
+org
+repl
+{}
+help
+{}
+#+end_example
+

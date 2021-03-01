@@ -21,8 +21,14 @@ agenda: key(shift-alt-A)
 junk: key(ctrl-d)
 open shell: key(alt-shift-s)
 (deed|deer|dear|dired): key(ctrl-x D)
-(nick|nickle): key(ctrl-n)
-(pick|pickle): key(ctrl-p)
+
+(nick|nickle):
+	key(ctrl-n)
+	user.quick_macro_set("key", "ctrl-n")
+	
+(pick|pickle):
+	key(ctrl-p)
+	user.quick_macro_set("key", "ctrl-p")
 (jump|find|search) next [<user.text>]:
     key("super-t s")
     insert(user.text)
@@ -38,7 +44,7 @@ emacs record: key(f3)
 emacs stop: key(f3)
 emacs play:
   key(f4)
-# user.quick_macro_set("key", "f4")
+  user.quick_macro_set("key", "f4")
 
 #(jump back|search back):
 #    key(escape ctrl-r)
@@ -97,6 +103,7 @@ go [line] <number>$:
     key(alt-g g)
     insert(number)
     key(enter)
+    
 recenter: key(ctrl-l)
 
 paste (pop | ring): key(alt-y)

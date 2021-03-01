@@ -1,7 +1,10 @@
 app: /emacs/
 title: /mu4e/
+title: /\*Article\*/
 -
 
+(pick|pickle|previous|up): key(p)
+(nick|nickle|next|down): key(n)
 delete: key(d)
 (undelete|keep): key(=)
 unmark: key(u)
@@ -13,3 +16,4 @@ apply: key(x)
 compose: key(C)
 reply: key(R)
 search: key(s)
+browser: key(a V)

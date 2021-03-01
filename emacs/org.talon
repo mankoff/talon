@@ -1,5 +1,6 @@
 app: /emacs/
 title: /.org/
+title: /scratch/
 -
 
 (level|heading) one: insert("* ")
@@ -19,6 +20,8 @@ follow link: key(ctrl-c ctrl-o)
 
 insert date: key(ctrl-c !)
 insert inactive date: key(ctrl-c <)
+
+# action(editword_left):
 
 ### Babel
 
